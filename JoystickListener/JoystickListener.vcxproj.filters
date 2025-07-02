@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\Aircraft.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\KeyboardListener.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\JoystickListener.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\JoystickListenerDI.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Aircraft.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CompositeLogger.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ConsoleLogger.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\FileLogger.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ILogger.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\KeyboardListener.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\KeyboardUtils.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\KeyEvent.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\KeyHistory.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\JoystickListener.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\JoystickListenerDI.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{d0986956-c8a2-4712-9c2b-d79412f981da}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
