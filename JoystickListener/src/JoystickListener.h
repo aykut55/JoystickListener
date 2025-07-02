@@ -13,6 +13,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <algorithm>
 
 #include "ILogger.h"
 
@@ -22,23 +23,23 @@ class CJoystickListener
 public:
     using ButtonHandler = std::function<void(int buttonId, bool pressed)>;
     using ButtonHeldHandler = std::function<void(int buttonId)>;
-    using AxisHandler = std::function<void(int x, int y, int z, int pov, std::string povDir)>;
+    using AxisHandler = std::function<void(double x, double y, double z, double pov, std::string povDir)>;
 
     ~CJoystickListener();
      CJoystickListener(UINT joystickId = 0);
 
-    bool Init();
-    void Reset();
-    void Start();
-    void Stop();
-    void CalibrateCenter();
+    bool Init(void);
+    void Reset(void);
+    void Start(void);
+    void Stop(void);
+    void CalibrateCenter(void);
 
-    void StartListening();
-    void StopListening();
+    void StartListening(void);
+    void StopListening(void);
 
-    bool IsRunning() const;
-    bool IsStopped() const;
-    bool IsInit() const;
+    bool IsRunning(void) const;
+    bool IsStopped(void) const;
+    bool IsInit(void) const;
 
     void SetAxisHandler(AxisHandler handler);
     void SetButtonHandler(ButtonHandler handler);
@@ -50,8 +51,11 @@ public:
     void  SetExternalObject(void* pObject);
     void* GetExternalObject(void);
 
+    void SetNormalize(bool normalize);
+    bool GetNormalize(void);
+
 private:
-    void ListenLoop();
+    void ListenLoop(void);
 
     UINT m_joystickId;
     std::thread m_thread;
@@ -73,4 +77,6 @@ private:
     std::string MapPOV(DWORD pov);
 
     void* m_pExternalObject;
+
+    std::atomic<bool> m_normalize;
 };

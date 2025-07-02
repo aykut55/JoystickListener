@@ -21,6 +21,7 @@ int mainJoystickListener()
     // Bunu öðren
     auto logger = std::make_shared<std::ostream>(std::cout.rdbuf());
     joystick.SetLogger(logger);
+    joystick.SetNormalize(true);
 
     if (!joystick.Init())
     {
@@ -28,7 +29,7 @@ int mainJoystickListener()
         return 1;
     }
 
-    joystick.SetAxisHandler([](int x, int y, int z, int pov, std::string povDir) {
+    joystick.SetAxisHandler([](double x, double y, double z, double pov, std::string povDir) {
         std::stringstream ss;
         ss << "[Axis] ";
         ss << "  X : " << std::setw(6) << x;
@@ -114,6 +115,7 @@ int mainJoystickListenerDI()
     // Bunu öðren
     auto logger = std::make_shared<std::ostream>(std::cout.rdbuf());    
     // joystick.SetLogger(logger);
+    joystick.SetNormalize(true);
 
     if (!joystick.Init())
     {
@@ -135,7 +137,7 @@ int mainJoystickListenerDI()
         std::cout << ss.str() << "\n";
         });
 
-    joystick.SetAxisHandler([](int x, int y, int z, int rz, int pov, std::string povDir) {
+    joystick.SetAxisHandler([](double x, double y, double z, double rz, double pov, std::string povDir) {
         std::stringstream ss;
         ss << "[Axis] ";
         ss << "  X : "      << std::setw(6) << x;
@@ -170,8 +172,9 @@ int mainJoystickListenerWithAircraft()
     auto logger = std::make_shared<ConsoleLogger>();
 
     auto listener = std::make_shared<CJoystickListener>(0);
-    //listener->SetLogger(logger);
     listener->SetExternalObject(&aircraft);
+    listener->SetNormalize(true);
+    //listener->SetLogger(logger);
 
     if (!listener->Init())
     {
@@ -193,7 +196,7 @@ int mainJoystickListenerWithAircraft()
         //std::cout << ss.str() << "\n";
         });
 
-    listener->SetAxisHandler([=](int x, int y, int z, int pov, std::string povDir) {
+    listener->SetAxisHandler([=](double x, double y, double z, double pov, std::string povDir) {
         std::stringstream ss;
         ss << "[Axis] ";
         ss << "  X : " << std::setw(6) << x;
@@ -206,7 +209,8 @@ int mainJoystickListenerWithAircraft()
         CAircraft* pAircraft = (CAircraft*)listener->GetExternalObject();
         if (pAircraft)
         {
-            double normalizerCoeff = 1 / 65535.0;
+            bool isNormalized = listener->GetNormalize();
+            double normalizerCoeff = 1;// 1 / 65535.0;
             pAircraft->SetRollCmd(x * normalizerCoeff);
             pAircraft->SetPitchCmd(y * normalizerCoeff);
             pAircraft->SetThrottleCmd(z * normalizerCoeff);
@@ -261,8 +265,9 @@ int mainJoystickListenerDIWithAircraft()
     auto logger = std::make_shared<ConsoleLogger>();
 
     auto listener = std::make_shared<CJoystickListenerDI>(guids[0]);
-    //listener->SetLogger(logger);
     listener->SetExternalObject(&aircraft);
+    listener->SetNormalize(true);
+    //listener->SetLogger(logger);
 
     if (!listener->Init())
     {
@@ -284,7 +289,7 @@ int mainJoystickListenerDIWithAircraft()
         //std::cout << ss.str() << "\n";
         });
 
-    listener->SetAxisHandler([=](int x, int y, int z, int rz, int pov, std::string povDir) {
+    listener->SetAxisHandler([=](double x, double y, double z, double rz, double pov, std::string povDir) {
         std::stringstream ss;
         ss << "[Axis] ";
         ss << "  X : " << std::setw(6) << x;
@@ -298,7 +303,8 @@ int mainJoystickListenerDIWithAircraft()
         CAircraft* pAircraft = (CAircraft*)listener->GetExternalObject();
         if (pAircraft)
         {
-            double normalizerCoeff = 1 / 65535.0;
+            bool isNormalized = listener->GetNormalize();
+            double normalizerCoeff = 1;// 1 / 65535.0;
             pAircraft->SetRollCmd(x * normalizerCoeff);
             pAircraft->SetPitchCmd(y * normalizerCoeff);
             pAircraft->SetThrottleCmd(z * normalizerCoeff);
@@ -349,5 +355,5 @@ int main()
     // return mainJoystickListenerDI();
  
     // Roll + Pitch + Throttle, 
-    // return mainJoystickListener();
+    return mainJoystickListener();
 }

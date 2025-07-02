@@ -29,12 +29,13 @@ CJoystickListenerDI::CJoystickListenerDI(GUID deviceGuid)
     m_silentAxis(true),
     m_silentButton(true),
     m_silentButtonHeld(true),
-    m_pExternalObject(nullptr)
+    m_pExternalObject(nullptr),
+    m_normalize(true)
 {
     ZeroMemory(&m_joyStatePrev, sizeof(m_joyStatePrev));
 }
 
-bool CJoystickListenerDI::Init()
+bool CJoystickListenerDI::Init(void)
 {
     HRESULT hr = DirectInput8Create(GetModuleHandle(NULL), DIRECTINPUT_VERSION,
         IID_IDirectInput8, (VOID**)&m_directInput, NULL);
@@ -86,14 +87,14 @@ bool CJoystickListenerDI::Init()
     return true;
 }
 
-void CJoystickListenerDI::Reset()
+void CJoystickListenerDI::Reset(void)
 {
     ZeroMemory(&m_joyStatePrev, sizeof(m_joyStatePrev));
     if (m_logger && !m_silentButton)
         (*m_logger) << "Joystick state reset.\n";
 }
 
-void CJoystickListenerDI::Start() {
+void CJoystickListenerDI::Start(void) {
     if (m_initialized && !m_running) {
         m_running = true;
         m_thread = std::thread(&CJoystickListenerDI::ListenLoop, this);
@@ -102,7 +103,7 @@ void CJoystickListenerDI::Start() {
     }
 }
 
-void CJoystickListenerDI::Stop() {
+void CJoystickListenerDI::Stop(void) {
     bool wasRunning = m_running.exchange(false);
     if (m_thread.joinable() && std::this_thread::get_id() != m_thread.get_id())
     {
@@ -116,7 +117,7 @@ void CJoystickListenerDI::Stop() {
     m_running = false;
 }
 
-void CJoystickListenerDI::CalibrateCenter()
+void CJoystickListenerDI::CalibrateCenter(void)
 {
     if (!m_initialized) return;
 
@@ -135,7 +136,7 @@ void CJoystickListenerDI::CalibrateCenter()
 }
 
 
-void CJoystickListenerDI::StartListening()
+void CJoystickListenerDI::StartListening(void)
 {
     if (!m_initialized || m_running)
         return;
@@ -144,7 +145,7 @@ void CJoystickListenerDI::StartListening()
     m_thread = std::thread(&CJoystickListenerDI::ListenLoop, this);
 }
 
-void CJoystickListenerDI::StopListening()
+void CJoystickListenerDI::StopListening(void)
 {
     if (!m_running)
         return;
@@ -154,17 +155,17 @@ void CJoystickListenerDI::StopListening()
         m_thread.join();
 }
 
-bool CJoystickListenerDI::IsRunning() const
+bool CJoystickListenerDI::IsRunning(void) const
 {
     return m_running;
 }
 
-bool CJoystickListenerDI::IsStopped() const
+bool CJoystickListenerDI::IsStopped(void) const
 {
     return !m_running;
 }
 
-bool CJoystickListenerDI::IsInit() const
+bool CJoystickListenerDI::IsInit(void) const
 {
     return m_initialized;
 }
@@ -196,7 +197,15 @@ void CJoystickListenerDI::SetSilentMode(bool silentAxis, bool silentButton, bool
     m_silentButtonHeld = silentButtonHeld;
 }
 
-void CJoystickListenerDI::ListenLoop()
+template<typename T>
+T clamp(T val, T minVal, T maxVal)
+{
+    if (val < minVal) return minVal;
+    if (val > maxVal) return maxVal;
+    return val;
+}
+
+void CJoystickListenerDI::ListenLoop(void)
 {
     DIJOYSTATE2 joyState;
     ZeroMemory(&joyState, sizeof(joyState));
@@ -217,6 +226,31 @@ void CJoystickListenerDI::ListenLoop()
         {
             continue;
         }
+
+        // Normalize veya ham 
+        double xVal = 0.0, yVal = 0.0, zVal = 0.0, rzVal = 0.0;
+
+        if (m_normalize)
+        {
+            xVal  = (static_cast<float>(joyState.lX) - 32767.5) / 32767.5;
+            yVal  = (static_cast<float>(joyState.lY) - 32767.5) / 32767.5;
+            zVal  = (static_cast<float>(joyState.lZ)) / 65535.0;
+            if (UseThrottleButtonAsRglSlider)
+                zVal  = (static_cast<float>(joyState.rglSlider[0])) / 65535.0;                
+            rzVal = (static_cast<float>(joyState.lRz) - 32767.5) / 32767.5;
+
+            xVal  = clamp(xVal, -1.0, 1.0);
+            yVal  = clamp(yVal, -1.0, 1.0);
+            zVal  = clamp(zVal, 0.0, 1.0);
+            rzVal = clamp(rzVal, -1.0, 1.0);
+        }
+        else
+        {
+
+        }
+
+        DWORD powRaw = joyState.rgdwPOV[0];
+        std::string povDir = MapPOV(powRaw);
 
         // button edge
         if (m_buttonHandler)
@@ -253,11 +287,11 @@ void CJoystickListenerDI::ListenLoop()
         // axes
         if (m_axisHandler)
         {
-            int correctedX     = 0;
-            int correctedY     = 0;
-            int correctedZ     = 0;
-            int correctedRZ    = 0;
-            int correctedPov   = 0;
+            double correctedX = 0;
+            double correctedY = 0;
+            double correctedZ = 0;
+            double correctedRZ = 0;
+            double correctedPov = 0;
             std::string povDir = "";
             bool axisChanged = false;
 
@@ -272,13 +306,25 @@ void CJoystickListenerDI::ListenLoop()
 
                 if (axisChanged)
                 {
-                    correctedX   = joyState.lX;
-                    correctedY   = joyState.lY;
-                    correctedZ   = joyState.lZ;
-                    correctedZ   = UseThrottleButtonAsReversed ? (65535 - joyState.rglSlider[0]) : (joyState.rglSlider[0]);
-                    correctedRZ  = joyState.lRz;
-                    correctedPov = joyState.rgdwPOV[0] == -1 ? 65535 : joyState.rgdwPOV[0];
-                    povDir       = MapPOV(correctedPov);
+                    if (m_normalize)
+                    {
+                        correctedX   = xVal;
+                        correctedY   = yVal;
+                        correctedZ   = UseThrottleButtonAsReversed ? (1.0 - zVal) : (zVal);
+                        correctedRZ  = rzVal;
+                        correctedPov = joyState.rgdwPOV[0] == -1 ? 65535 : joyState.rgdwPOV[0];
+                        povDir       = MapPOV(joyState.rgdwPOV[0]);
+                    }
+                    else
+                    {
+                        correctedX   = joyState.lX;
+                        correctedY   = joyState.lY;
+                        correctedZ   = joyState.lZ;
+                        correctedZ   = UseThrottleButtonAsReversed ? (65535 - joyState.rglSlider[0]) : (joyState.rglSlider[0]);
+                        correctedRZ  = joyState.lRz;
+                        correctedPov = joyState.rgdwPOV[0] == -1 ? 65535 : joyState.rgdwPOV[0];
+                        povDir       = MapPOV(correctedPov);
+                    }
 
                     if (m_logger && !m_silentAxis)
                     {
@@ -307,12 +353,24 @@ void CJoystickListenerDI::ListenLoop()
 
                 if (axisChanged)
                 {
-                    correctedX   = joyState.lX;
-                    correctedY   = joyState.lY;                    
-                    correctedZ   = UseThrottleButtonAsReversed ? (65535 - joyState.lZ) : (joyState.lZ);
-                    correctedRZ  = joyState.lRz;
-                    correctedPov = joyState.rgdwPOV[0] == -1 ? 65535 : joyState.rgdwPOV[0];
-                    povDir       = MapPOV(correctedPov);
+                    if (m_normalize)
+                    {
+                        correctedX = xVal;
+                        correctedY = yVal;
+                        correctedZ = UseThrottleButtonAsReversed ? (1.0 - zVal) : (zVal);
+                        correctedRZ = rzVal;
+                        correctedPov = joyState.rgdwPOV[0];
+                        povDir = MapPOV(joyState.rgdwPOV[0]);
+                    }
+                    else
+                    {
+                        correctedX   = joyState.lX;
+                        correctedY   = joyState.lY;                    
+                        correctedZ   = UseThrottleButtonAsReversed ? (65535 - joyState.lZ) : (joyState.lZ);
+                        correctedRZ  = joyState.lRz;
+                        correctedPov = joyState.rgdwPOV[0] == -1 ? 65535 : joyState.rgdwPOV[0];
+                        povDir       = MapPOV(correctedPov);
+                    }
 
                     if (m_logger && !m_silentAxis)
                     {
@@ -381,4 +439,14 @@ void CJoystickListenerDI::SetExternalObject(void* pObject)
 void* CJoystickListenerDI::GetExternalObject(void)
 {
     return m_pExternalObject;
+}
+
+void CJoystickListenerDI::SetNormalize(bool normalize)
+{
+    m_normalize = normalize;
+}
+
+bool CJoystickListenerDI::GetNormalize(void)
+{
+    return m_normalize;
 }

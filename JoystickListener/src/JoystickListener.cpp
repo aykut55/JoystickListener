@@ -14,14 +14,15 @@ CJoystickListener::CJoystickListener(UINT joystickId)
     m_silentAxis(true), 
     m_silentButton(true), 
     m_silentButtonHeld(true),
-    m_pExternalObject(nullptr)
+    m_pExternalObject(nullptr),
+    m_normalize(true)
 {
     ZeroMemory(&m_joyInfoPrev, sizeof(m_joyInfoPrev));
     m_joyInfoPrev.dwSize = sizeof(JOYINFOEX);
     m_joyInfoPrev.dwFlags = JOY_RETURNALL;
 }
 
-bool CJoystickListener::Init()
+bool CJoystickListener::Init(void)
 {
     JOYCAPS caps;
     if (joyGetDevCaps(m_joystickId, &caps, sizeof(caps)) != JOYERR_NOERROR)
@@ -40,7 +41,7 @@ bool CJoystickListener::Init()
     return true;
 }
 
-void CJoystickListener::Reset()
+void CJoystickListener::Reset(void)
 {
     ZeroMemory(&m_joyInfoPrev, sizeof(m_joyInfoPrev));
     m_joyInfoPrev.dwSize = sizeof(JOYINFOEX);
@@ -50,7 +51,7 @@ void CJoystickListener::Reset()
         (*m_logger) << "Joystick reset.\n";
 }
 
-void CJoystickListener::Start() {
+void CJoystickListener::Start(void) {
     if (m_initialized && !m_running) {
         m_running = true;
         m_thread = std::thread(&CJoystickListener::ListenLoop, this);
@@ -59,7 +60,7 @@ void CJoystickListener::Start() {
     }
 }
 
-void CJoystickListener::Stop() {
+void CJoystickListener::Stop(void) {
     bool wasRunning = m_running.exchange(false);
     if (m_thread.joinable() && std::this_thread::get_id() != m_thread.get_id())
     {
@@ -73,7 +74,7 @@ void CJoystickListener::Stop() {
     m_running = false;
 }
 
-void CJoystickListener::CalibrateCenter()
+void CJoystickListener::CalibrateCenter(void)
 {
     if (!m_initialized)
         return;
@@ -94,7 +95,7 @@ void CJoystickListener::CalibrateCenter()
     }
 }
 
-void CJoystickListener::StartListening()
+void CJoystickListener::StartListening(void)
 {
     if (m_running)
         return;
@@ -103,7 +104,7 @@ void CJoystickListener::StartListening()
     m_thread = std::thread(&CJoystickListener::ListenLoop, this);
 }
 
-void CJoystickListener::StopListening()
+void CJoystickListener::StopListening(void)
 {
     if (!m_running)
         return;
@@ -113,17 +114,17 @@ void CJoystickListener::StopListening()
         m_thread.join();
 }
 
-bool CJoystickListener::IsRunning() const
+bool CJoystickListener::IsRunning(void) const
 {
     return m_running;
 }
 
-bool CJoystickListener::IsStopped() const
+bool CJoystickListener::IsStopped(void) const
 {
     return !m_running;
 }
 
-bool CJoystickListener::IsInit() const
+bool CJoystickListener::IsInit(void) const
 {
     return m_initialized;
 }
@@ -155,7 +156,15 @@ void CJoystickListener::SetSilentMode(bool silentAxis, bool silentButton, bool s
     m_silentButtonHeld = silentButtonHeld;
 }
 
-void CJoystickListener::ListenLoop()
+template<typename T>
+T clamp(T val, T minVal, T maxVal)
+{
+    if (val < minVal) return minVal;
+    if (val > maxVal) return maxVal;
+    return val;
+}
+
+void CJoystickListener::ListenLoop(void)
 {
     JOYINFOEX joyInfo;
     joyInfo.dwSize = sizeof(JOYINFOEX);
@@ -175,6 +184,27 @@ void CJoystickListener::ListenLoop()
             Sleep(50);
             continue;
         }
+
+        // Normalize veya ham 
+        double xVal = 0.0, yVal = 0.0, zVal = 0.0;
+
+        if (m_normalize)
+        {
+            xVal = (static_cast<float>(joyInfo.dwXpos) - 32767.5) / 32767.5;
+            yVal = (static_cast<float>(joyInfo.dwYpos) - 32767.5) / 32767.5;
+            zVal = (static_cast<float>(joyInfo.dwZpos)) / 65535.0;
+
+            xVal = clamp(xVal, -1.0, 1.0);
+            yVal = clamp(yVal, -1.0, 1.0);
+            zVal = clamp(zVal,  0.0, 1.0);
+        }
+        else
+        {
+
+        }
+
+        DWORD powRaw = joyInfo.dwPOV;
+        std::string povDir = MapPOV(powRaw);
 
         // button edge
         if (m_buttonHandler)
@@ -221,11 +251,11 @@ void CJoystickListener::ListenLoop()
         // axes
         if (m_axisHandler)
         {
-            int correctedX = 0;
-            int correctedY = 0;
-            int correctedZ = 0;
-            int correctedRZ = 0;
-            int correctedPov = 0;
+            double correctedX = 0;
+            double correctedY = 0;
+            double correctedZ = 0;
+            double correctedRZ = 0;
+            double correctedPov = 0;
             std::string povDir = "";
             bool axisChanged = false;
 
@@ -238,11 +268,22 @@ void CJoystickListener::ListenLoop()
 
             if (axisChanged)
             {
-                correctedX     = joyInfo.dwXpos;
-                correctedY     = joyInfo.dwYpos;
-                correctedZ     = UseThrottleButtonAsReversed ? (65535 - joyInfo.dwZpos) : (joyInfo.dwZpos);
-                correctedPov   = joyInfo.dwPOV;
-                povDir         = MapPOV(joyInfo.dwPOV);
+                if (m_normalize)
+                {
+                    correctedX     = xVal;
+                    correctedY     = yVal;
+                    correctedZ     = UseThrottleButtonAsReversed ? (1.0-zVal) : (zVal);
+                    correctedPov   = joyInfo.dwPOV;
+                    povDir         = MapPOV(joyInfo.dwPOV);
+                }
+                else
+                {
+                    correctedX     = joyInfo.dwXpos;
+                    correctedY     = joyInfo.dwYpos;
+                    correctedZ     = UseThrottleButtonAsReversed ? (65535 - joyInfo.dwZpos) : (joyInfo.dwZpos);
+                    correctedPov   = joyInfo.dwPOV;
+                    povDir         = MapPOV(joyInfo.dwPOV);
+                }
 
                 if (m_logger && !m_silentAxis)
                 {
@@ -308,4 +349,14 @@ void CJoystickListener::SetExternalObject(void* pObject)
 void* CJoystickListener::GetExternalObject(void)
 {
     return m_pExternalObject;
+}
+
+void CJoystickListener::SetNormalize(bool normalize)
+{
+    m_normalize = normalize;
+}
+
+bool CJoystickListener::GetNormalize(void)
+{
+    return m_normalize;
 }
